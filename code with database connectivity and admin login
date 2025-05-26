@@ -1,0 +1,158 @@
+import javax.swing.*;
+
+public class Main {
+    public static void main(String[] args) {
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception ignored) {}
+
+        SwingUtilities.invokeLater(() -> {
+            LoginFrame loginFrame = new LoginFrame();
+            loginFrame.setVisible(true);
+        });
+    }
+}
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+
+class LoginFrame extends JFrame {
+    private final JTextField usernameField;
+    private final JPasswordField passwordField;
+
+    public LoginFrame() {
+        setTitle("Admin Login");
+        setSize(300, 180);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
+
+        JPanel panel = new JPanel(new GridLayout(3, 2, 10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        panel.add(new JLabel("Username:"));
+        usernameField = new JTextField();
+        panel.add(usernameField);
+
+        panel.add(new JLabel("Password:"));
+        passwordField = new JPasswordField();
+        panel.add(passwordField);
+
+        JButton loginButton = new JButton("Login");
+        loginButton.addActionListener(e -> authenticate());
+        panel.add(new JLabel());
+        panel.add(loginButton);
+
+        add(panel);
+    }
+
+    private void authenticate() {
+        String username = usernameField.getText();
+        String password = new String(passwordField.getPassword());
+        if (username.equals("admin") && password.equals("admin123")) {
+            SwingUtilities.invokeLater(() -> new BillFrame().setVisible(true));
+            dispose();
+        } else {
+            JOptionPane.showMessageDialog(this, "Invalid credentials", "Login Failed", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+}
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.sql.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+class BillFrame extends JFrame {
+    private final JTextField nameField, meterField, unitField;
+    private final JComboBox<String> categoryBox;
+
+    public BillFrame() {
+        setTitle("Electricity Bill Calculator");
+        setSize(400, 300);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
+
+        JPanel panel = new JPanel(new GridLayout(5, 2, 10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        nameField = new JTextField();
+        meterField = new JTextField();
+        unitField = new JTextField();
+        categoryBox = new JComboBox<>(new String[]{"Residential", "Commercial"});
+
+        panel.add(new JLabel("Name:"));
+        panel.add(nameField);
+
+        panel.add(new JLabel("Meter Number:"));
+        panel.add(meterField);
+
+        panel.add(new JLabel("Units Consumed:"));
+        panel.add(unitField);
+
+        panel.add(new JLabel("Category:"));
+        panel.add(categoryBox);
+
+        JButton calcButton = new JButton("Generate Bill");
+        calcButton.addActionListener(e -> generateBill());
+        panel.add(new JLabel());
+        panel.add(calcButton);
+
+        add(panel);
+    }
+
+    private void generateBill() {
+        String name = nameField.getText().trim();
+        String meter = meterField.getText().trim();
+        String unitStr = unitField.getText().trim();
+        String category = (String) categoryBox.getSelectedItem();
+
+        if (name.isEmpty() || meter.isEmpty() || unitStr.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "All fields are required", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        int units;
+        try {
+            units = Integer.parseInt(unitStr);
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Units must be a number", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        double amount = calculateBill(units, category);
+        saveToDatabase(name, meter, units, category, amount);
+        JOptionPane.showMessageDialog(this, "Bill Amount: ₹" + amount, "Success", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private double calculateBill(int units, String category) {
+        double rate = category.equals("Residential") ? 4.5 : 7.5;
+        double slab1 = Math.min(units, 100) * rate;
+        double slab2 = Math.max(Math.min(units - 100, 200), 0) * rate * 1.2;
+        double slab3 = Math.max(units - 300, 0) * rate * 1.5;
+        double base = slab1 + slab2 + slab3;
+        return base + (base * 0.18); // Adding GST
+    }
+
+    private void saveToDatabase(String name, String meter, int units, String category, double amount) {
+        String url = "jdbc:mysql://localhost:3306/electricity"; // create db: electricity
+        String user = "root"; // your DB username
+        String pass = "password"; // your DB password
+
+        try (Connection conn = DriverManager.getConnection(url, user, pass)) {
+            String sql = "INSERT INTO bills(name, meter, units, category, amount, timestamp) VALUES (?, ?, ?, ?, ?, ?)";
+            PreparedStatement pst = conn.prepareStatement(sql);
+            pst.setString(1, name);
+            pst.setString(2, meter);
+            pst.setInt(3, units);
+            pst.setString(4, category);
+            pst.setDouble(5, amount);
+            pst.setString(6, LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+            pst.executeUpdate();
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(this, "DB Error: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+}
