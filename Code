@@ -1,0 +1,153 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+abstract class Consumer {
+    private String name;
+    private String meterNo;
+    private int units;
+    private String category; 
+
+    public Consumer(String name, String meterNo, int units, String category) {
+        this.name = name;
+        this.meterNo = meterNo;
+        this.units = units;
+        this.category = category;
+    }
+
+    public String getName() { return name; }
+    public String getMeterNo() { return meterNo; }
+    public int getUnits() { return units; }
+    public String getCategory() { return category; }
+
+    public abstract double calculateBill();
+}
+
+class ResidentialConsumer extends Consumer {
+    public ResidentialConsumer(String name, String meterNo, int units) {
+        super(name, meterNo, units, "Residential");
+    }
+
+    public double calculateBill() {
+        int units = getUnits();
+        double amount = 0;
+
+        if (units <= 100) amount = units * 3;
+        else if (units <= 300) amount = 100 * 3 + (units - 100) * 5;
+        else if (units <= 500) amount = 100 * 3 + 200 * 5 + (units - 300) * 7;
+        else amount = 100 * 3 + 200 * 5 + 200 * 7 + (units - 500) * 10;
+
+        return amount + 50 + 0.18 * amount; 
+    }
+}
+
+class CommercialConsumer extends Consumer {
+    public CommercialConsumer(String name, String meterNo, int units) {
+        super(name, meterNo, units, "Commercial");
+    }
+
+    public double calculateBill() {
+        int units = getUnits();
+        double rate = 8.0;
+        double amount = units * rate;
+        return amount + 100 + 0.18 * amount; 
+    }
+}
+
+public class ElectricityBillProGUI extends JFrame {
+    private JTextField nameField, meterField, unitField;
+    private JComboBox<String> categoryBox;
+    private JTextArea resultArea;
+
+    public ElectricityBillProGUI() {
+        setTitle("Advanced Electricity Bill Calculator - India");
+        setSize(600, 500);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setLayout(new BorderLayout());
+
+        JPanel inputPanel = new JPanel(new GridLayout(5, 2, 10, 10));
+        inputPanel.setBorder(BorderFactory.createTitledBorder("Enter Consumer Details"));
+
+        nameField = new JTextField();
+        meterField = new JTextField();
+        unitField = new JTextField();
+        categoryBox = new JComboBox<>(new String[] {"Residential", "Commercial"});
+
+        inputPanel.add(new JLabel("Consumer Name:")); inputPanel.add(nameField);
+        inputPanel.add(new JLabel("Meter Number:")); inputPanel.add(meterField);
+        inputPanel.add(new JLabel("Units Consumed:")); inputPanel.add(unitField);
+        inputPanel.add(new JLabel("Consumer Type:")); inputPanel.add(categoryBox);
+
+        JButton generateButton = new JButton("Generate Bill");
+        JButton clearButton = new JButton("Clear");
+        inputPanel.add(generateButton); inputPanel.add(clearButton);
+        add(inputPanel, BorderLayout.NORTH);
+
+        resultArea = new JTextArea();
+        resultArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
+        resultArea.setEditable(false);
+        add(new JScrollPane(resultArea), BorderLayout.CENTER);
+
+        generateButton.addActionListener(e -> generateBill());
+        clearButton.addActionListener(e -> clearFields());
+    }
+
+    private void generateBill() {
+        String name = nameField.getText().trim();
+        String meter = meterField.getText().trim();
+        String unitsStr = unitField.getText().trim();
+        String category = categoryBox.getSelectedItem().toString();
+
+        if (name.isEmpty() || meter.isEmpty() || unitsStr.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "All fields must be filled.", "Input Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        try {
+            int units = Integer.parseInt(unitsStr);
+            if (units < 0) throw new NumberFormatException();
+
+            Consumer consumer = category.equals("Residential") ?
+                new ResidentialConsumer(name, meter, units) :
+                new CommercialConsumer(name, meter, units);
+
+            double total = consumer.calculateBill();
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss"));
+            String output = String.format(
+                "Electricity Bill - India\n-----------------------------\nName: %s\nMeter No: %s\nCategory: %s\nUnits: %d\n\nTotal Bill: ₹%.2f\nGenerated on: %s\n",
+                consumer.getName(), consumer.getMeterNo(), consumer.getCategory(), consumer.getUnits(), total, timestamp
+            );
+
+            resultArea.setText(output);
+            saveToFile(output, consumer.getMeterNo());
+
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "Units must be a valid positive number.", "Invalid Input", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void saveToFile(String content, String meterNo) {
+        try (FileWriter writer = new FileWriter("Bill_" + meterNo + ".txt")) {
+            writer.write(content);
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(this, "Error saving bill file.", "File Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void clearFields() {
+        nameField.setText("");
+        meterField.setText("");
+        unitField.setText("");
+        categoryBox.setSelectedIndex(0);
+        resultArea.setText("");
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new ElectricityBillProGUI().setVisible(true));
+    }
+}
